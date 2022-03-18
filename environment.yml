@@ -1,0 +1,13 @@
+name: jwstuser
+dependencies:
+  - astropy
+  - h5py
+  - matplotlib
+  - numpy
+  - pip
+  - pyodbc
+  - pytest-cov
+  - python
+  - scipy
+  - pip:
+    - requests_html
