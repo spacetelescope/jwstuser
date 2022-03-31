@@ -5,6 +5,7 @@ from getpass import getpass
 from pathlib import Path
 from os import getenv
 from requests import get as requests_get
+from statistics import mode
 
 class UnauthorizedError(Exception):
     def __init__(self, message):
@@ -85,32 +86,46 @@ class EdbTimeSeries:
     '''Handle time series data from the JWST engineering database.'''
     def __init__(self, mnemonic, lines):
         self.mnemonic = mnemonic
-        self.data = self.parse(lines)
+        self.time, self.value = self.parse(lines)
+        self._cadence = None
+        self._largest_gap = None
 
     @property
-    def times(self):
-        '''Return timeseries times as list of datetime objects.'''
-        return [sample[0] for sample in self.data]
+    def timestep_seconds(self):
+        '''Return time step between successive times in seconds.'''
+        try:
+            return [(b - a).total_seconds() for  a, b in zip(
+                self.time[:-1], self.time[1:])]
+        except IndexError:
+            return None
 
     @property
-    def values(self):
-        '''Return timeseries values as list.'''
-        return [sample[1] for sample in self.data]
+    def cadence_seconds(self):
+        '''Return most common time step in seconds.'''
+        timestep_seconds = self.timestep_seconds
+        if timestep_seconds:
+            self._cadence = mode(timestep_seconds)
+            self._largest_gap = max(timestep_seconds)
+        return self._cadence
 
     @property
-    def times_values(self):
-        '''Return timeseries times and values as separate lists.'''
-        return list(zip(*self.data))
+    def largest_gap_seconds(self):
+        '''Return most common time step in seconds.'''
+        timestep_seconds = self.timestep_seconds
+        if timestep_seconds:
+            self._cadence = mode(timestep_seconds)
+            self._largest_gap = max(timestep_seconds)
+        return self._largest_gap
 
     def parse(self, lines):
         '''Parse lines of text returned by MAST EDB interface.'''
         cast = {'real': float, 'varchar': str}
-        data = []
+        time = []
+        value = []
         for field in csv_reader(lines, delimiter=',', quotechar='"'):
             if field[0] == 'theTime':
                 continue
             sqltype = field[3]
-            utc = datetime.fromisoformat(field[0])
-            value = cast[sqltype](field[2])
-            data.append([utc, value])
-        return data
+            time.append(datetime.fromisoformat(field[0]))
+            value.append(cast[sqltype](field[2]))
+        return time, value
