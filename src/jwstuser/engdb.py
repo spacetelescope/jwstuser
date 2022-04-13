@@ -1,11 +1,10 @@
 from collections import namedtuple
 from csv import reader as csv_reader
 from datetime import datetime
-from getpass import getpass
-from pathlib import Path
-from os import getenv
 from requests import get as requests_get
 from statistics import mode
+
+from .util import get_mast_api_token
 
 class UnauthorizedError(Exception):
     def __init__(self, message):
@@ -13,51 +12,12 @@ class UnauthorizedError(Exception):
         self.message = message
 
 
-class EngDB:
+class EngineeringDatabase:
     '''Access JWST engineering database hosted by MAST at STScI.'''
     def __init__(self, mast_api_token=None):
-        self.token = self.get_token(mast_api_token)
+        self.token = get_mast_api_token(mast_api_token)
         self.baseurl = 'https://mast.stsci.edu/jwst/api/v0.1/' \
             'Download/file?uri=mast:jwstedb'
-
-    def get_token(self, mast_api_token=None, prompt=True):
-        '''Get MAST API token. Precedence is arg, env, file, prompt.'''
-        if not mast_api_token:
-            mast_api_token = getenv('MAST_API_TOKEN')
-        if not mast_api_token:
-            path = Path.home() / '.mast_api_token'
-            try:
-                with open(path, 'r') as fp:
-                    lines = fp.read().splitlines()
-                    if len(lines) == 1:
-                        mast_api_token = lines[0]
-                    else:
-                        print('Ignoring ~/.mast_api_token, expected one line') 
-            except FileNotFoundError:
-                pass
-        if not mast_api_token and prompt:
-            mast_api_token = input('Enter MAST API token: ')
-        try:
-            return self.verified_token(mast_api_token)
-        except ValueError as e:
-            raise e 
-
-    def verified_token(self, token):
-        '''Verify MAST API token type, length, and character set.'''
-        is_not = 'MAST API token is not'
-        if token:
-            if type(token) is str:
-                if len(token) == 32:
-                    if token.isalnum():
-                        return token
-                    else:
-                        raise ValueError(f"{is_not} alphanumeric: '{token}'")
-                else:
-                    raise ValueError(f"{is_not} 32 characters: '{token}'")
-            else:
-                raise ValueError(f"{is_not} type str: {type(token)}")
-        else:
-            raise ValueError(f"{is_not} defined")
 
     def format_date(self, date):
         '''Convert datetime object or ISO 8501 string to EDB date format.'''
