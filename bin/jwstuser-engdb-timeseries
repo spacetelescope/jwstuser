@@ -19,4 +19,5 @@ except IndexError:
 
 # Connect to JWST engineering database.
 ed = EngineeringDatabase(mast_api_token=None)
-ed.timeseries(mnemonic, start, end)
+ts = ed.timeseries(mnemonic, start, end)
+print(f'cadence: {ts.cadence_seconds} s, gap: {ts.largest_gap_seconds} s')
