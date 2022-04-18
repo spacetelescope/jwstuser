@@ -1,12 +1,14 @@
 name: jwstuser
-dependencies:
+channels:
+  - default
   - astropy
-  - h5py
+dependencies:
+  - astroquery
+  - astropy
+  - jupyter
   - matplotlib
   - numpy
   - pip
-  - pyodbc
-  - pytest-cov
   - python
   - scipy
   - pip:
