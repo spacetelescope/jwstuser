@@ -16,6 +16,7 @@ class JwstFilteredQuery:
         query.filter_by_timerange('date_beg', '2022-04-02 05:00:00', 59671.8)
         query.append_output_columns('pi_name')
         query.execute_query()
+        query.get_caom_product_list()
         query.browse()
     '''
     def __init__(self, collection):
@@ -25,6 +26,7 @@ class JwstFilteredQuery:
         self.filters = []
         self._params = None
         self.result = None
+        self._dataset = None
 
     @property
     def collection(self):
@@ -42,14 +44,14 @@ class JwstFilteredQuery:
         return self._params
 
     @property
-    def datasets(self):
+    def dataset(self):
         '''Return dataset names for most recent query.'''
-        try:
-            filenames = self.result['filename']
-            roots = ['_'.join(f.split('_')[:-1]) for f in filenames]
-            return sorted(list(set(roots)))
-        except TypeError:
-            return None
+        return self._dataset
+
+    @property
+    def caom_obsid(self):
+        '''Return CAOM obsid for datasets returned by the most recent query.'''
+        return self._caom_obsid
 
     def filter_by_values(self, keyword, values):
         '''Require keyword value to be in enumerated list.
@@ -209,11 +211,39 @@ class JwstFilteredQuery:
             elif any([n != v for n, v in zip(newval, values)]):
                 self.result[colname] = [v.isoformat()[:-3] for v in newval]
 
+    def get_caom_obsid(self):
+        '''Get CAOM obsid for archive files returned by JWST filtered query.
+
+        References:
+            https://mast.stsci.edu/api/v0/pyex.html#MastCaomFilteredPy
+            https://mast.stsci.edu/api/v0/_services.html#MastCaomFiltered
+            https://mast.stsci.edu/api/v0/_c_a_o_mfields.html
+        '''
+        if self.result is None:
+            raise RuntimeError('execute query before getting CAOM obsid')
+        filename = list(set(self.result['filename']))
+        self._dataset = sorted(list(set(
+            [f.rsplit('_', 1)[0] for f in filename])))
+        service = 'Mast.Caom.Filtered'
+        filters = [
+            {'paramName': 'obs_collection', 'values': ['JWST']},
+            {'paramName': 'instrument_name', 'values': [f'{self.collection}']},
+            {'paramName': 'obs_id', 'values': self.dataset}]
+        params = {'columns': 'obsid', 'filters': filters}
+        caom_filtered_result = Mast.service_request(service, params)
+        self._caom_obsid = ','.join(caom_filtered_result['obsid'].data)
+
+    def get_caom_product_list(self):
+        self.get_caom_obsid()
+        self.caom_product_list = CaomProductList(self.caom_obsid)
+
     def browse(self):
         '''Show query results in a browser window.'''
         if self.result is None:
             raise RuntimeError('execute query before trying to show result')
         self.result.show_in_browser(jsviewer=True)
+        if self.caom_product_list:
+            self.caom_product_list.browse()
 
 class CaomProductList:
     '''Get list of CAOM products for one or more CAOM product group IDs.
