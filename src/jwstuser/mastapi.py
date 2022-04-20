@@ -16,8 +16,7 @@ class JwstFilteredQuery:
         query.filter_by_timerange('date_beg', '2022-04-02 05:00:00', 59671.8)
         query.append_output_columns('pi_name')
         query.execute_query()
-        query.convert_dates()
-        query.show_result_in_browser()
+        query.browse()
     '''
     def __init__(self, collection):
         self._collection = collection
@@ -177,7 +176,7 @@ class JwstFilteredQuery:
             if stripped in self.columns:
                 self.columns.remove(stripped)
 
-    def execute_query(self):
+    def execute_query(self, convert_dates=True):
         '''Execute query by calling MAST service with specified parameters.'''
         if not self.filters:
             raise ValueError('add search filter(s) before executing query')
@@ -188,6 +187,8 @@ class JwstFilteredQuery:
             'filters': self.filters}
         self._params = params
         self.result = Mast.service_request(self.service, params)
+        if convert_dates:
+            self.convert_dates()
 
     def convert_dates(self):
         '''Convert table values containing /Date()/ to datetime objects.'''
@@ -208,11 +209,66 @@ class JwstFilteredQuery:
             elif any([n != v for n, v in zip(newval, values)]):
                 self.result[colname] = [v.isoformat()[:-3] for v in newval]
 
-    def show_result_in_browser(self):
+    def browse(self):
         '''Show query results in a browser window.'''
         if self.result is None:
             raise RuntimeError('execute query before trying to show result')
         self.result.show_in_browser(jsviewer=True)
+
+class CaomProductList:
+    '''Get list of CAOM products for one or more CAOM product group IDs.
+
+    Examples:
+        CaomProductList('71738577')
+        CaomProductList('71738577, 71738600')
+        CaomProductList(['71738577'])
+        CaomProductList(['71738577', '71738600'])
+        CaomProductList(71738577)
+        CaomProductList([71738577])
+        CaomProductList([71738577, 71738600])
+
+    References:
+        https://mast.stsci.edu/api/v0/pyex.html#MastCaomProductsPy
+        https://mast.stsci.edu/api/v0/_services.html#MastCaomProducts
+        https://mast.stsci.edu/api/v0/_productsfields.html
+    '''
+    def __init__(self, caom_obsid):
+        self._obsid = self.parse_caom_obsid(caom_obsid)
+        self.product_list = self.get_product_list()
+
+    @property
+    def obsid(self):
+        '''Return CAOM obsid list as a comma-separated string.'''
+        return self._obsid
+
+    def parse_caom_obsid(self, caom_obsid):
+        '''Parse input specification of one or more CAOM obsid.
+
+        caom_obsid: str or int or iterable yielding those types
+            specification of one or more CAOM obsid
+        '''
+        try:
+            obsid = caom_obsid.split(',')
+        except AttributeError:
+            obsid = caom_obsid
+        try:
+            return ','.join([str(int(obsid))])
+        except TypeError:
+            pass
+        try:
+            return ','.join([str(int(i)) for i in obsid])
+        except (TypeError, ValueError):
+            raise TypeError('CAOM obsid must evaluate to one or more integers')
+
+    def get_product_list(self):
+        '''Get list of CAOM products for specified CAOM obsid.'''
+        service = 'Mast.Caom.Products'
+        params = {'obsid': self.obsid}
+        return Mast.service_request(service, params)
+
+    def browse(self):
+        '''Show product list in a browser window.'''
+        self.product_list.show_in_browser(jsviewer=True)
 
 def mjd_from_time(time):
     '''Return modified Julian date equivalent to input time specification.
