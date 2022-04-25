@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
 from getpass import getpass
+from math import nan
 from pathlib import Path
 from os import getenv
 
+from astropy.table import unique as table_unique
 from astropy.time import Time
 from astroquery.mast import Mast, Observations
+from numpy import isnan as np_isnan
 
 class JwstFilteredQuery:
     '''Manage MAST API query based on JWST FITS header keyword values.
@@ -111,7 +114,7 @@ class JwstFilteredQuery:
         self.filters.append(newfilter)
 
     def set_output_columns(self, column_names):
-        '''Set list of output columns to specified value.
+        '''Set output columns as specified.
 
         column_names: str or list of str
             Comma-separated column names or list of column names
@@ -142,11 +145,24 @@ class JwstFilteredQuery:
                 f"known collections: {' '.join(inst_configs)}")
         self.append_output_columns('exp_type, detector, subarray')
         self.append_output_columns('readpatt, nints, ngroups, duration')
-        self.append_output_columns('productLevel, filename')
+        # self.append_output_columns('productLevel, filename')
 
     def set_output_columns_to_all(self):
         '''Specify that all columns ('*') should be output.'''
         self.columns = '*'
+
+    def prepend_required_output_columns(self):
+        '''Prepend required output columns and remove duplicates.
+
+        Require fileSetName and detector columns to construct the CAOM obsid.
+        Use list(dict.fromkeys()) to remove duplicates, while preserving order.
+        '''
+        if self.columns == '*':
+            return
+        required_columns = ['filename']
+        columns = list(dict.fromkeys(
+            required_columns + self.columns))
+        self.set_output_columns(columns)
 
     def append_output_columns(self, column_names):
         '''Append one or more output column names to current list.
@@ -182,8 +198,7 @@ class JwstFilteredQuery:
         '''Execute query by calling MAST service with specified parameters.'''
         if not self.filters:
             raise ValueError('add search filter(s) before executing query')
-        if not self.columns:
-            raise ValueError('specify output columns before executing query')
+        self.prepend_required_output_columns()
         params = {
             'columns': ','.join(self.columns),
             'filters': self.filters}
@@ -208,7 +223,8 @@ class JwstFilteredQuery:
                 else v for v in values]
             if all([isinstance(v, datetime) for v in newval]):
                 self.result[colname] = newval
-            elif any([n != v for n, v in zip(newval, values)]):
+            elif any([n != v and not np_isnan(v) for n, v
+                    in zip(newval, values)]):
                 self.result[colname] = [v.isoformat()[:-3] for v in newval]
 
     def get_caom_obsid(self):
@@ -221,9 +237,8 @@ class JwstFilteredQuery:
         '''
         if self.result is None:
             raise RuntimeError('execute query before getting CAOM obsid')
-        filename = list(set(self.result['filename']))
-        self._dataset = sorted(list(set(
-            [f.rsplit('_', 1)[0] for f in filename])))
+        dataset = ['_'.join(f.split('_')[:-1]) for f in self.result['filename']]
+        self._dataset = sorted(list(set(dataset)))
         service = 'Mast.Caom.Filtered'
         filters = [
             {'paramName': 'obs_collection', 'values': ['JWST']},
@@ -237,13 +252,17 @@ class JwstFilteredQuery:
         self.get_caom_obsid()
         self.caom_product_list = CaomProductList(self.caom_obsid)
 
-    def browse(self):
-        '''Show query results in a browser window.'''
+    def browse(self, unique=True):
+        '''Show unique query results in a browser window.'''
         if self.result is None:
             raise RuntimeError('execute query before trying to show result')
-        self.result.show_in_browser(jsviewer=True)
+        if unique:
+            unique_result = table_unique(self.result, keys='filename')
+            unique_result.show_in_browser(jsviewer=True)
+        else:
+            self.result.show_in_browser(jsviewer=True)
         if self.caom_product_list:
-            self.caom_product_list.browse()
+            self.caom_product_list.browse(unique=unique)
 
 class CaomProductList:
     '''Get list of CAOM products for one or more CAOM product group IDs.
@@ -288,7 +307,8 @@ class CaomProductList:
         try:
             return ','.join([str(int(i)) for i in obsid])
         except (TypeError, ValueError):
-            raise TypeError('CAOM obsid must evaluate to one or more integers')
+            raise TypeError(
+                f'CAOM obsid must evaluate to integer(s): {caom_obsid}')
 
     def get_product_list(self):
         '''Get list of CAOM products for specified CAOM obsid.'''
@@ -296,9 +316,14 @@ class CaomProductList:
         params = {'obsid': self.obsid}
         return Mast.service_request(service, params)
 
-    def browse(self):
+    def browse(self, unique=True):
         '''Show product list in a browser window.'''
-        self.product_list.show_in_browser(jsviewer=True)
+        columns = 'obsID,productFilename,size,calib_level,' \
+            'productSubGroupDescription,productType,dataproduct_type'
+        product_list = self.product_list[columns.split(',')]
+        if unique:
+            product_list = table_unique(product_list, keys='productFilename')
+        product_list.show_in_browser(jsviewer=True)
 
 def mjd_from_time(time):
     '''Return modified Julian date equivalent to input time specification.
