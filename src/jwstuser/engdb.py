@@ -79,7 +79,7 @@ class EdbTimeSeries:
 
     def parse(self, lines):
         '''Parse lines of text returned by MAST EDB interface.'''
-        cast = {'real': float, 'varchar': str}
+        cast = {'real': float, 'varchar': str, 'float': float}
         time = []
         value = []
         for field in csv_reader(lines, delimiter=',', quotechar='"'):
