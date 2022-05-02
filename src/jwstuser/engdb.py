@@ -4,7 +4,7 @@ from datetime import datetime
 from requests import get as requests_get
 from statistics import mode
 
-from .util import get_mast_api_token
+from .mastapi import get_mast_api_token
 
 class UnauthorizedError(Exception):
     def __init__(self, message):
