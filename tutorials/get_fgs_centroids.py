@@ -39,12 +39,8 @@ plt.show()
 # Now extract to an ascii file (first column time in MJD UTC, second column X-position, third column Y-position):
 fout = open('fgs_centroids_hp14_may2-2022.dat', 'w')
 
-#from astropy.time import Time
-
 fout.write('# MJD (UTC; ISIM) \t Centroid X \t Centroid Y\n')
 for i in range( len(cen_x.time) ):
-
-    #t = Time( cen_x.time[i].isoformat(), format = 'isot' ) 
 
     fout.write('{0:.10f} \t {1:.7f} \t {2:.7f}\n'.format( cen_x.time_mjd[i], cen_x.value[i], cen_y.value[i] ))   
 
