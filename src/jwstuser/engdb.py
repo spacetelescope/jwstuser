@@ -1,3 +1,4 @@
+import numpy as np
 from collections import namedtuple
 from csv import reader as csv_reader
 from datetime import datetime
@@ -46,7 +47,7 @@ class EdbTimeSeries:
     '''Handle time series data from the JWST engineering database.'''
     def __init__(self, mnemonic, lines):
         self.mnemonic = mnemonic
-        self.time, self.value = self.parse(lines)
+        self.time, self.time_mjd, self.value = self.parse(lines)
         self._cadence = None
         self._largest_gap = None
 
@@ -79,13 +80,45 @@ class EdbTimeSeries:
 
     def parse(self, lines):
         '''Parse lines of text returned by MAST EDB interface.'''
-        cast = {'real': float, 'varchar': str, 'float': float}
+        # Define SQL-to-python datatype conversions. 
+        # Taken from https://docs.microsoft.com/en-us/sql/machine-learning/python/python-libraries-and-data-types?view=sql-server-ver15
+        cast = {'bigint': float, 
+                'binary': bytes,
+                'bit': bool,
+                'char': str,
+                'date': datetime,
+                'datetime': datetime,
+                'float': float, 
+                'nchar': str,
+                'nvarchar': str,
+                'nvarchar(max)': str,
+                'real': float,
+                'smalldatetime': datetime,
+                'smallint': int, 
+                'tinyint': int,
+                'uniqueidentifier': str,
+                'varbinary': bytes,
+                'varbinary(max)': bytes,
+                'varchar': str, 
+                'varchar(n)': str,
+                'varchar(max)': str}
+        
+        # Set lists that will save the data:
         time = []
+        time_mjd = []
         value = []
+
         for field in csv_reader(lines, delimiter=',', quotechar='"'):
+
             if field[0] == 'theTime':
                 continue
+
+            # Read in SQL data-type:
             sqltype = field[3]
+
+            # Save time and value converted to python using the SQL data-type:
             time.append(datetime.fromisoformat(field[0]))
+            time_mjd.append(float(field[1]))
             value.append(cast[sqltype](field[2]))
-        return time, value
+
+        return time, time_mjd, value
