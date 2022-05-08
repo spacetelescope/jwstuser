@@ -51,6 +51,10 @@ class EdbTimeSeries:
         self._cadence = None
         self._largest_gap = None
 
+    def __len__(self):
+        '''Return number of points in time series.'''
+        return len(self.time)
+
     @property
     def timestep_seconds(self):
         '''Return time step between successive times in seconds.'''
