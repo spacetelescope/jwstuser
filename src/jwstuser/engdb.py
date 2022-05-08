@@ -80,8 +80,9 @@ class EdbTimeSeries:
 
     def parse(self, lines):
         '''Parse lines of text returned by MAST EDB interface.'''
-        # Define SQL-to-python datatype conversions. 
-        # Taken from https://docs.microsoft.com/en-us/sql/machine-learning/python/python-libraries-and-data-types?view=sql-server-ver15
+        # Define python analog of SQL data types.
+        # https://docs.microsoft.com/en-us/sql/machine-learning/python
+        #     /python-libraries-and-data-types?view=sql-server-ver15
         cast = {'bigint': float, 
                 'binary': bytes,
                 'bit': bool,
@@ -103,20 +104,21 @@ class EdbTimeSeries:
                 'varchar(n)': str,
                 'varchar(max)': str}
         
-        # Set lists that will save the data:
+        # Initialize return variables.
         time = []
         time_mjd = []
         value = []
 
         for field in csv_reader(lines, delimiter=',', quotechar='"'):
 
+            # Ignore header row.
             if field[0] == 'theTime':
                 continue
 
-            # Read in SQL data-type:
+            # Extract SQL data type in engineering database.
             sqltype = field[3]
 
-            # Save time and value converted to python using the SQL data-type:
+            # Convert SQL type to python type. Save time, MJD, and value.
             time.append(datetime.fromisoformat(field[0]))
             time_mjd.append(float(field[1]))
             value.append(cast[sqltype](field[2]))
