@@ -8,6 +8,8 @@ from statistics import mode
 from .mastapi import get_mast_api_token
 
 class UnauthorizedError(Exception):
+    '''Handle MAST authorization exception.'''
+
     def __init__(self, message):
         super(UnauthorizedError, self).__init__(message)
         self.message = message
@@ -15,6 +17,7 @@ class UnauthorizedError(Exception):
 
 class EngineeringDatabase:
     '''Access JWST engineering database hosted by MAST at STScI.'''
+
     def __init__(self, mast_api_token=None):
         self.token = get_mast_api_token(mast_api_token)
         self.baseurl = 'https://mast.stsci.edu/jwst/api/v0.1/' \
@@ -24,7 +27,7 @@ class EngineeringDatabase:
         '''Convert datetime object or ISO 8501 string to EDB date format.'''
         if type(date) is str:
             dtobj = datetime.fromisoformat(date)
-        elif type(data) is datetime:
+        elif type(date) is datetime:
             dtobj = date
         else:
             raise ValueError('date must be ISO 8501 string or datetime obj')
@@ -45,11 +48,16 @@ class EngineeringDatabase:
 
 class EdbTimeSeries:
     '''Handle time series data from the JWST engineering database.'''
+
     def __init__(self, mnemonic, lines):
         self.mnemonic = mnemonic
         self.time, self.time_mjd, self.value = self.parse(lines)
         self._cadence = None
         self._largest_gap = None
+
+    def __len__(self):
+        '''Return number of points in time series.'''
+        return len(self.time)
 
     @property
     def timestep_seconds(self):
@@ -80,8 +88,9 @@ class EdbTimeSeries:
 
     def parse(self, lines):
         '''Parse lines of text returned by MAST EDB interface.'''
-        # Define SQL-to-python datatype conversions. 
-        # Taken from https://docs.microsoft.com/en-us/sql/machine-learning/python/python-libraries-and-data-types?view=sql-server-ver15
+        # Define python analog of SQL data types.
+        # https://docs.microsoft.com/en-us/sql/machine-learning/python
+        #     /python-libraries-and-data-types?view=sql-server-ver15
         cast = {'bigint': float, 
                 'binary': bytes,
                 'bit': bool,
@@ -103,22 +112,71 @@ class EdbTimeSeries:
                 'varchar(n)': str,
                 'varchar(max)': str}
         
-        # Set lists that will save the data:
+        # Initialize return variables.
         time = []
         time_mjd = []
         value = []
 
         for field in csv_reader(lines, delimiter=',', quotechar='"'):
 
+            # Ignore header row.
             if field[0] == 'theTime':
                 continue
 
-            # Read in SQL data-type:
+            # Extract SQL data type in engineering database.
             sqltype = field[3]
 
-            # Save time and value converted to python using the SQL data-type:
+            # Convert SQL type to python type. Save time, MJD, and value.
             time.append(datetime.fromisoformat(field[0]))
             time_mjd.append(float(field[1]))
             value.append(cast[sqltype](field[2]))
 
         return time, time_mjd, value
+
+class EventMessages:
+    '''Fetch and interpret OSS event messages for specified time interval.'''
+
+    def __init__(self, start, end, engdb=None):
+        '''Instantiate an EventMessages object.
+
+        :param start: earliest UTC date and time 
+        :type start: datetime, str parsable by datetime.fromisoformat()
+        :param end: end of time interval to use when fetching messages
+        :type end: datetime, str parsable by datetime.fromisoformat()
+        :param engdb: existing interface to engineering database
+        :type engdb: jwstuser.engdb.EngineeringDatabase
+
+        :Example:
+
+        >>> from datetime import datetime
+        >>> from jwstuser.engdb import EventMessages
+        >>> utcnow = datetime.utcnow()
+        >>> em = EventMessages('2022-05-01 23:59:59', utcnow)
+        >>> print(f'{len(em)} event messages')
+        10555
+        >>> print(f'{em.time[0]} -- {em.value[0]}')
+        2022-05-01 23:41:58.623000 -- SCS ID 511 reached specified step 255
+        '''
+
+        if not engdb:
+            engdb = EngineeringDatabase()
+        self._timeseries = engdb.timeseries('ICTM_EVENT_MSG', start, end)
+
+    def __len__(self):
+        '''Return number of event messages.'''
+        return len(self._timeseries)
+
+    @property
+    def time(self):
+        '''Return datetime of each event message.'''
+        return self._timeseries.time
+
+    @property
+    def mjd(self):
+        '''Return modified Julian date for each event message.'''
+        return self._timeseries.time_mjd
+
+    @property
+    def value(self):
+        '''Return list of event messages.'''
+        return self._timeseries.value
