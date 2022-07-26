@@ -7,3 +7,5 @@ Documentation:
 
 Contributing:
 - Use [Sphinx-RTD](https://sphinx-rtd-tutorial.readthedocs.io/en/latest/docstrings.html) for docstrings.
+
+`jwstuser` was developed by Jeff Valenti, with contributions from Nestor Espinoza.
