@@ -9,6 +9,7 @@ from astropy.time import Time
 from astroquery.mast import Mast, Observations
 from numpy import isnan as np_isnan
 
+"""
 class JwstFilteredQuery:
     '''Manage MAST API query based on JWST FITS header keyword values.
 
@@ -361,6 +362,8 @@ def mjd_from_time(time):
         return Time(dt.replace(tzinfo=timezone.utc)).mjd
     else:
         return Time(dt).mjd
+
+"""
 
 def get_mast_api_token(mast_api_token=None, prompt=False):
     '''Get MAST API token. Precedence is argument, environment, file, prompt.'''
